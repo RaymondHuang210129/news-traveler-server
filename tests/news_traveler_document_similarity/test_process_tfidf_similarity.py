@@ -10,8 +10,8 @@ def test_process_tfidf_similarity():
         "Whether or not dogs dream isn’t known with scientific certainty, but it sure is difficult to imagine that they don’t. We’ve all watched our dogs demonstrate behaviors in their sleep that resemble what they do in a fully awake state. Paddling legs, whining, growling, wagging tails, chewing jowls, and twitching noses inspire us to wonder what our dogs are dreaming about.",
         "Located in Oakland, California, The Cat Town Café & Adoption Center has become the first cat café in the United States which opened in late October, reports Carol Pogash of the New York Times. Inside the café you won’t see cages, but free roaming cats looking for a forever home.",
     ]
-    select_count = 3
+    threshold = -1.1
 
-    result = process_tfidf_similarity(base_document, documents, select_count)
+    result = process_tfidf_similarity(base_document, documents, threshold)
 
-    assert len(result) == 3
+    assert len(result) == 5

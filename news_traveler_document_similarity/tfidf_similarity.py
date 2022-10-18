@@ -5,7 +5,7 @@ from sklearn.metrics.pairwise import cosine_similarity
 
 
 def process_tfidf_similarity(
-    base_document: str, documents: list, select_count: int
+    base_document: str, documents: list, threshold: float
 ) -> npt.NDArray[np.int_]:
     tfidf_vectorizer = TfidfVectorizer()
 
@@ -15,6 +15,4 @@ def process_tfidf_similarity(
         tfidf_matrix[0:1], tfidf_matrix[1:]
     ).flatten()
 
-    related_docs_indices = np.argsort(cosine_similarities)[-select_count:][::-1]
-
-    return related_docs_indices
+    return np.where(cosine_similarities > threshold)[0]
