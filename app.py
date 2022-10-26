@@ -1,12 +1,11 @@
 import json
 import os
+import random
 from typing import Dict, List, Tuple
 
 import requests
 from flask import Flask, request
 from newsdataapi import NewsDataApiClient
-
-from news_traveler_sentiment_analysis import sentiment_analysis
 
 
 def send_newsapi_request(keyword: str) -> Tuple[Dict, int]:
@@ -73,8 +72,13 @@ def send_biasapi_request(article: str) -> Tuple[Dict, int]:
 
 
 def send_toneapi_request(articles: List[str]) -> Tuple[List, int]:
-    print(articles[0])
-    return sentiment_analysis.process_sentiment_analysis(articles), 200
+    # return sentiment_analysis.process_sentiment_analysis(articles), 200
+    return [
+        {
+            "label": random.choice(["POS", "NEU", "NEG"]),
+            "score": random.uniform(0, 1),
+        }
+    ], 200
 
 
 def parse_semantic_response(biasapi_response: Dict, tone_response: Dict) -> str:
@@ -86,7 +90,12 @@ def parse_semantic_response(biasapi_response: Dict, tone_response: Dict) -> str:
     else:
         tone["class"] = "negative"
     tone["confidence"] = tone_response["score"]
-    return json.dumps({"bias": "center", "tone": tone})
+    return json.dumps(
+        {
+            "bias": random.choice(["left", "leanLeft", "center", "leanRight", "right"]),
+            "tone": tone,
+        }
+    )
 
 
 app = Flask(__name__)
