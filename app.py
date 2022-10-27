@@ -69,7 +69,25 @@ def parse_newsdataapi_response(newsdataapi_response: Dict) -> str:
 
 
 def send_biasapi_request(article: str) -> Tuple[Dict, int]:
-    return {}, 200
+    form_data = {"API": os.environ.get("BIASAPI_KEY"), "Text": article}
+    response = requests.post(
+        "https://api.thebipartisanpress.com/api/endpoints/beta/robert",
+        data=form_data,
+        timeout=20,
+    )
+    if response.ok:
+        try:
+            print(response.content.decode("utf-8"))
+            value = float(response.content.decode("utf-8"))
+            if value < -42 or value > 42:
+                print("bias api value out of range")
+                raise ValueError
+            return {"value": value}, 200
+        except ValueError:
+            return {}, 400
+    else:
+        print("bias api not ok")
+        return {}, response.status_code
 
 
 def send_toneapi_request(articles: List[str]) -> Tuple[List, int]:
@@ -86,7 +104,17 @@ def parse_semantic_response(biasapi_response: Dict, tone_response: Dict) -> str:
     else:
         tone["class"] = "negative"
     tone["confidence"] = tone_response["score"]
-    return json.dumps({"bias": "center", "tone": tone})
+    if biasapi_response["value"] < -25.2:
+        bias = "left"
+    elif -25.2 <= biasapi_response["value"] < -8.4:
+        bias = "leanLeft"
+    elif -8.4 <= biasapi_response["value"] < 8.4:
+        bias = "center"
+    elif 8.4 <= biasapi_response["value"] < 25.2:
+        bias = "leanRight"
+    else:
+        bias = "right"
+    return json.dumps({"bias": bias, "tone": tone})
 
 
 app = Flask(__name__)
