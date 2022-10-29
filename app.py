@@ -113,7 +113,7 @@ def filter_opposite_semantic(response: Dict, current_semantic: Dict) -> Dict:
 app = Flask(__name__)
 
 
-@app.route("/get-news-semantic", methods=["GET"])
+@app.route("/get-news-semantic", methods=["GET", "POST"])
 def get_news_semantic() -> Tuple[str, int]:
     try:
         request_content = json.loads(request.data.decode("utf-8"))
@@ -133,7 +133,7 @@ def get_news_semantic() -> Tuple[str, int]:
         return "Internal error", 500
 
 
-@app.route("/opposite-semantic-news", methods=["GET"])
+@app.route("/opposite-semantic-news", methods=["GET", "POST"])
 def get_opposite_news() -> Tuple[str, int]:
 
     request_content = json.loads(request.data.decode("utf-8"))
@@ -162,7 +162,7 @@ def get_opposite_news() -> Tuple[str, int]:
     return filtered_response, 200
 
 
-@app.route("/search", methods=["GET"])
+@app.route("/search", methods=["GET", "POST"])
 def search() -> Tuple[str, int]:
     try:
         request_content = json.loads(request.data.decode("utf-8"))
