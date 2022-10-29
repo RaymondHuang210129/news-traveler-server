@@ -1,14 +1,13 @@
 import json
 import os
 import random
-from typing import Dict, List, Tuple
 
 import requests
 from flask import Flask, request
 from newsdataapi import NewsDataApiClient
 
 
-def send_newsapi_request(keyword: str) -> Tuple[Dict, int]:
+def send_newsapi_request(keyword: str) -> tuple[dict, int]:
     api_key = os.getenv("NEWSAPI_KEY")
     params = {"q": keyword, "sortBy": "publishedAt", "apiKey": api_key}
     response = requests.get(
@@ -16,10 +15,10 @@ def send_newsapi_request(keyword: str) -> Tuple[Dict, int]:
     )
     if response.ok:
         return json.loads(response.content.decode("utf-8")), response.status_code
-    return {}, response.status_code
+    return {"errorMessage": response.content.decode("utf-8")}, response.status_code
 
 
-def parse_newsapi_response(newsapi_response: Dict) -> Dict:
+def parse_newsapi_response(newsapi_response: dict) -> dict:
     response = {"totalResults": newsapi_response["totalResults"], "results": []}
     for news in newsapi_response["articles"]:
         response["results"].append(
@@ -38,7 +37,7 @@ def parse_newsapi_response(newsapi_response: Dict) -> Dict:
     return response
 
 
-def send_newsdataapi_request(keyword: str) -> Tuple[Dict, int]:
+def send_newsdataapi_request(keyword: str) -> tuple[dict, int]:
     api_key = os.getenv("NEWSDATAAPI_KEY")
     api = NewsDataApiClient(apikey=api_key)
     response = api.news_api(q=keyword, country="us")
@@ -47,7 +46,7 @@ def send_newsdataapi_request(keyword: str) -> Tuple[Dict, int]:
     return response, 200
 
 
-def parse_newsdataapi_response(newsdataapi_response: Dict) -> Dict:
+def parse_newsdataapi_response(newsdataapi_response: dict) -> dict:
     response = {"totalResults": newsdataapi_response["totalResults"], "results": []}
     for news in newsdataapi_response["results"]:
         response["results"].append(
@@ -66,11 +65,11 @@ def parse_newsdataapi_response(newsdataapi_response: Dict) -> Dict:
     return response
 
 
-def send_biasapi_request(article: str) -> Tuple[Dict, int]:
+def send_biasapi_request(article: str) -> tuple[dict, int]:
     return {}, 200
 
 
-def send_toneapi_request(articles: List[str]) -> Tuple[List, int]:
+def send_toneapi_request(articles: list[str]) -> tuple[list, int]:
     return [
         {
             "label": random.choice(["POS", "NEU", "NEG"]),
@@ -79,7 +78,7 @@ def send_toneapi_request(articles: List[str]) -> Tuple[List, int]:
     ], 200
 
 
-def parse_semantic_response(biasapi_response: Dict, tone_response: Dict) -> str:
+def parse_semantic_response(biasapi_response: dict, tone_response: dict) -> dict:
     tone = {}
     if tone_response["label"] == "POS":
         tone["class"] = "positive"
@@ -94,7 +93,7 @@ def parse_semantic_response(biasapi_response: Dict, tone_response: Dict) -> str:
     }
 
 
-def filter_opposite_semantic(response: Dict, current_semantic: Dict) -> Dict:
+def filter_opposite_semantic(response: dict, current_semantic: dict) -> dict:
     filtered_response = {}
     filtered_response["results"] = list(
         filter(
@@ -104,7 +103,7 @@ def filter_opposite_semantic(response: Dict, current_semantic: Dict) -> Dict:
             response["results"],
         )
     )
-    filtered_response["totalResults"] = len(filtered_response["results"])
+    filtered_response["totalResults"] = len(list(filtered_response["results"]))
     return filtered_response
 
 
@@ -112,7 +111,7 @@ app = Flask(__name__)
 
 
 @app.route("/get-news-semantic", methods=["GET", "POST"])
-def get_news_semantic() -> Tuple[str, int]:
+def get_news_semantic() -> tuple[str, int]:
     try:
         request_content = json.loads(request.data.decode("utf-8"))
         if "selectedNews" not in request_content:
@@ -124,7 +123,10 @@ def get_news_semantic() -> Tuple[str, int]:
         toneapi_response, status_code = send_toneapi_request([news_content])
         if status_code != 200:
             return f"tone API status_code {status_code}", 500
-        return parse_semantic_response(biasapi_response, toneapi_response[0]), 200
+        return (
+            json.dumps(parse_semantic_response(biasapi_response, toneapi_response[0])),
+            200,
+        )
     except ValueError:
         return "Invalid json format", 400
     except RuntimeError:
@@ -132,7 +134,7 @@ def get_news_semantic() -> Tuple[str, int]:
 
 
 @app.route("/opposite-semantic-news", methods=["GET", "POST"])
-def get_opposite_news() -> Tuple[str, int]:
+def get_opposite_news() -> tuple[str, int]:
 
     request_content = json.loads(request.data.decode("utf-8"))
     if "keyword" not in request_content:
@@ -157,11 +159,11 @@ def get_opposite_news() -> Tuple[str, int]:
     filtered_response = filter_opposite_semantic(
         parsed_response, request_content["selectedNews"]["semanticInfo"]
     )
-    return filtered_response, 200
+    return json.dumps(filtered_response), 200
 
 
 @app.route("/search", methods=["GET", "POST"])
-def search() -> Tuple[str, int]:
+def search() -> tuple[str, int]:
     try:
         request_content = json.loads(request.data.decode("utf-8"))
         if "keyword" not in request_content:
@@ -181,7 +183,7 @@ def search() -> Tuple[str, int]:
             news["semanticInfo"] = parse_semantic_response(
                 biasapi_response, toneapi_response[0]
             )
-        return parsed_response, 200
+        return json.dumps(parsed_response), 200
     except ValueError:
         return "Invalid json format", 400
     except RuntimeError:
