@@ -41,7 +41,6 @@ def parse_newsapi_response(newsapi_response: Dict) -> Dict:
 def send_newsdataapi_request(keyword: str) -> Tuple[Dict, int]:
     api_key = os.getenv("NEWSDATAAPI_KEY")
     api = NewsDataApiClient(apikey=api_key)
-    print(api_key)
     response = api.news_api(q=keyword, country="us")
     if response["status"] != "success":
         return response, 400
@@ -106,7 +105,6 @@ def filter_opposite_semantic(response: Dict, current_semantic: Dict) -> Dict:
         )
     )
     filtered_response["totalResults"] = len(filtered_response["results"])
-    print(len(filtered_response["results"]))
     return filtered_response
 
 
