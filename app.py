@@ -1,7 +1,7 @@
 import http
 import json
 import os
-from typing import Any, Callable, Literal, Optional, TypedDict, TypeVar, Union, cast
+from typing import Any, Callable, TypeVar, Union, cast
 
 import requests
 from dotenv import load_dotenv
@@ -9,6 +9,28 @@ from flask import Flask, request
 from newsdataapi import NewsDataApiClient
 from werkzeug.exceptions import BadRequestKeyError
 
+from data_types import (
+    BiasAnalysisError,
+    BiasAnalysisSuccess,
+    BiasOkResponse,
+    ErrorResponse,
+    GatewayTimeoutResponse,
+    InternalErrorResponse,
+    News,
+    NewsApiParam,
+    NewsDataApiParam,
+    NewsWithSentiment,
+    OppositeSentimentNewsOkResponse,
+    SearchError,
+    SearchOkResponse,
+    SearchSuccess,
+    SentimentAnalysisError,
+    SentimentAnalysisSuccess,
+    SentimentAndBiasError,
+    SentimentAndBiasOkResponse,
+    SentimentAndBiasSuccess,
+    SentimentOkResponse,
+)
 from news_traveler_sentiment_analysis.sentiment_analysis import (
     sentiment_analysis_per_document,
 )
@@ -18,140 +40,6 @@ load_dotenv()
 NEWSDATAAPI_KEY = os.environ["NEWSDATAAPI_KEY"]
 NEWSAPI_KEY = os.environ["NEWSAPI_KEY"]
 BIASAPI_KEY = os.environ["BIASAPI_KEY"]
-
-
-class OppositeNewsRequest(TypedDict):
-    content: str
-    keyword: str
-
-
-class SentimentRequest(TypedDict):
-    content: str
-
-
-class ErrorResponse(TypedDict):
-    message: str
-
-
-class InternalErrorResponse(TypedDict):
-    message: str
-    debug: str
-
-
-class GatewayTimeoutResponse(TypedDict):
-    reason: str
-
-
-class Sentiment(TypedDict):
-    kind: Literal["positive", "neutral", "negative"]
-    confidence: float
-
-
-class News(TypedDict):
-    source: str
-    author: Optional[str]
-    title: str
-    description: str
-    content: str
-    url: str
-    urlToImage: Optional[str]
-    publishedAt: Optional[str]
-
-
-class NewsWithSentiment(TypedDict):
-    source: str
-    author: Optional[str]
-    title: str
-    description: str
-    content: str
-    url: str
-    urlToImage: Optional[str]
-    publishedAt: Optional[str]
-    sentiment: Sentiment
-    bias: float
-
-
-class SearchResponse(TypedDict):
-    count: int
-    results: list[News]
-
-
-class OppositeNewsResponse(TypedDict):
-    count: int
-    results: list[NewsWithSentiment]
-
-
-class SentimentResponse(TypedDict):
-    sentiment: Sentiment
-    bias: float
-
-
-class NewsDataApiParam(TypedDict):
-    country: Optional[str]
-    category: Optional[str]
-    language: Optional[str]
-    domain: Optional[str]
-    q: str
-    qInTitle: Optional[str]
-    page: Optional[int]
-
-
-class NewsApiParam(TypedDict):
-    q: str
-    searchIn: Optional[list[str]]
-    sources: Optional[list[str]]
-    domains: Optional[list[str]]
-    excludeDomains: Optional[list[str]]
-    startFrom: Optional[str]
-    endTo: Optional[str]
-    language: Optional[str]
-    sortBy: Optional[Literal["relevancy", "popularity", "publishedAt"]]
-    pageSize: Optional[int]
-    page: Optional[int]
-
-
-class SearchSuccess(TypedDict):
-    news: list[News]
-
-
-class SearchError(TypedDict):
-    status_code: int
-    message: str
-
-
-class SentimentSuccess(TypedDict):
-    sentiment: Sentiment
-    bias: float
-
-
-class SentimentError(TypedDict):
-    status_code: int
-    message: str
-    sentiment: Optional[Sentiment]
-    bias: Optional[float]
-
-
-class BiasAnalysisSuccess(TypedDict):
-    value: float
-
-
-class BiasAnalysisError(TypedDict):
-    status_code: int
-    message: str
-
-
-class SentimentAnalysisSuccess(TypedDict):
-    value: Sentiment
-
-
-class SentimentAnalysisError(TypedDict):
-    status_code: int
-    message: str
-
-
-class SentimentAnalysisResult(TypedDict):
-    status_code: int
-    value: Sentiment
 
 
 # A workaround for not using NotRequired
@@ -318,13 +206,13 @@ def request_sentimentapi(
     }
 
 
-def analyze_sentiments(
+def analyze_sentiment_and_bias(
     article: str,
     call_biasapi: Callable[[str], Union[BiasAnalysisSuccess, BiasAnalysisError]],
     call_sentimentapi: Callable[
         [str], Union[SentimentAnalysisSuccess, SentimentAnalysisError]
     ],
-) -> Union[SentimentSuccess, SentimentError]:
+) -> Union[SentimentAndBiasSuccess, SentimentAndBiasError]:
     bias_result = call_biasapi(article)
     sentiment_result = call_sentimentapi(article)
     if "value" in bias_result and "value" in sentiment_result:
@@ -347,6 +235,22 @@ def analyze_sentiments(
     }
 
 
+def analyze_sentiment(
+    article: str,
+    call_sentimentapi: Callable[
+        [str], Union[SentimentAnalysisSuccess, SentimentAnalysisError]
+    ],
+) -> Union[SentimentAnalysisSuccess, SentimentAnalysisError]:
+    return call_sentimentapi(article)
+
+
+def analyze_bias(
+    article: str,
+    call_biasapi: Callable[[str], Union[BiasAnalysisSuccess, BiasAnalysisError]],
+) -> Union[BiasAnalysisSuccess, BiasAnalysisError]:
+    return call_biasapi(article)
+
+
 def search_news(
     params: SearchParam,
     call_api: Callable[[SearchParam], Union[SearchSuccess, SearchError]],
@@ -360,7 +264,10 @@ app = Flask(__name__)
 @app.route("/sentiment", methods=["POST"])
 def get_news_sentiment() -> tuple[
     Union[
-        ErrorResponse, InternalErrorResponse, GatewayTimeoutResponse, SentimentResponse
+        ErrorResponse,
+        InternalErrorResponse,
+        GatewayTimeoutResponse,
+        SentimentOkResponse,
     ],
     int,
 ]:
@@ -374,22 +281,85 @@ def get_news_sentiment() -> tuple[
         }, http.HTTPStatus.BAD_REQUEST
     except KeyError as e:
         return {"message": "key not found: content"}, http.HTTPStatus.BAD_REQUEST
-    analyze_result = analyze_sentiments(
+    analyze_result = analyze_sentiment(article, request_sentimentapi)
+    if "status_code" not in analyze_result:
+        analyze_result = cast(SentimentAnalysisSuccess, analyze_result)
+        return {"sentiment": analyze_result["value"]}, http.HTTPStatus.OK
+    analyze_result = cast(SentimentAnalysisError, analyze_result)
+    return {
+        "message": analyze_result["message"],
+        "debug": "",
+    }, http.HTTPStatus.INTERNAL_SERVER_ERROR
+
+
+@app.route("/bias", methods=["POST"])
+def get_news_bias() -> tuple[
+    Union[
+        ErrorResponse,
+        InternalErrorResponse,
+        GatewayTimeoutResponse,
+        BiasOkResponse,
+    ],
+    int,
+]:
+    try:
+        article = json.loads(request.data.decode("utf-8"))["content"]
+    except json.JSONDecodeError as e:
+        return {"message": f"json decode error: {e.msg}"}, http.HTTPStatus.BAD_REQUEST
+    except UnicodeDecodeError as e:
+        return {
+            "message": f"string decode error: {e.reason}"
+        }, http.HTTPStatus.BAD_REQUEST
+    except KeyError as e:
+        return {"message": "key not found: content"}, http.HTTPStatus.BAD_REQUEST
+    analyze_result = analyze_bias(article, request_biasapi)
+    if "status_code" not in analyze_result:
+        analyze_result = cast(BiasAnalysisSuccess, analyze_result)
+        return {"bias": analyze_result["value"]}, http.HTTPStatus.OK
+    analyze_result = cast(BiasAnalysisError, analyze_result)
+    return {
+        "message": analyze_result["message"],
+        "debug": "",
+    }, http.HTTPStatus.INTERNAL_SERVER_ERROR
+
+
+@app.route("/sentiment-and-bias", methods=["POST"])
+def get_news_sentiment_and_bias() -> tuple[
+    Union[
+        ErrorResponse,
+        InternalErrorResponse,
+        GatewayTimeoutResponse,
+        SentimentAndBiasOkResponse,
+    ],
+    int,
+]:
+    try:
+        article = json.loads(request.data.decode("utf-8"))["content"]
+    except json.JSONDecodeError as e:
+        return {"message": f"json decode error: {e.msg}"}, http.HTTPStatus.BAD_REQUEST
+    except UnicodeDecodeError as e:
+        return {
+            "message": f"string decode error: {e.reason}"
+        }, http.HTTPStatus.BAD_REQUEST
+    except KeyError as e:
+        return {"message": "key not found: content"}, http.HTTPStatus.BAD_REQUEST
+    analyze_result = analyze_sentiment_and_bias(
         article, request_biasapi_mock, request_sentimentapi
     )
     if "status_code" not in analyze_result:
-        analyze_result = cast(SentimentSuccess, analyze_result)
+        analyze_result = cast(SentimentAndBiasSuccess, analyze_result)
         return {
             "sentiment": analyze_result["sentiment"],
             "bias": analyze_result["bias"],
         }, http.HTTPStatus.OK
-    analyze_result = cast(SentimentError, analyze_result)
+    analyze_result = cast(SentimentAndBiasError, analyze_result)
     return {
         "message": "biasapi error "
         if analyze_result["bias"] is None
         else "" + "sentimentapi error "
         if analyze_result["sentiment"] is None
-        else "" + f": {analyze_result['message']}"
+        else "" + f": {analyze_result['message']}",
+        "debug": "",
     }, http.HTTPStatus.INTERNAL_SERVER_ERROR
 
 
@@ -399,7 +369,7 @@ def get_opposite_news() -> tuple[
         ErrorResponse,
         InternalErrorResponse,
         GatewayTimeoutResponse,
-        OppositeNewsResponse,
+        OppositeSentimentNewsOkResponse,
     ],
     int,
 ]:
@@ -426,46 +396,32 @@ def get_opposite_news() -> tuple[
         search_result = cast(SearchError, search_result)
         return {
             "message": f"newsdataapi status_code {search_result['status_code']} "
-            f"with message {search_result['message']}"
+            f"with message {search_result['message']}",
+            "debug": "",
         }, http.HTTPStatus.INTERNAL_SERVER_ERROR
     search_result = cast(SearchSuccess, search_result)
-    analyze_result = analyze_sentiments(
-        article, request_biasapi_mock, request_sentimentapi
-    )
+    analyze_result = analyze_sentiment(article, request_sentimentapi)
     if "status_code" in analyze_result:
-        analyze_result = cast(SentimentError, analyze_result)
+        analyze_result = cast(SentimentAnalysisError, analyze_result)
         return {
-            "message": "biasapi error "
-            if analyze_result["bias"] is None
-            else "" + "sentimentapi error "
-            if analyze_result["sentiment"] is None
-            else "" + f": {analyze_result['message']}"
+            "message": analyze_result["message"]
         }, http.HTTPStatus.INTERNAL_SERVER_ERROR
-    current_sentiment = cast(SentimentSuccess, analyze_result)["sentiment"]
-    current_bias = cast(SentimentSuccess, analyze_result)["bias"]
+    current_sentiment = cast(SentimentAnalysisSuccess, analyze_result)["value"]
     filtered_results: list[NewsWithSentiment] = []
     for news in search_result["news"]:
         if len(filtered_results) == 3:
             break
-        analyze_result = analyze_sentiments(
-            news["content"], request_biasapi_mock, request_sentimentapi
-        )
+        analyze_result = analyze_sentiment(news["content"], request_sentimentapi)
         if "status_code" in analyze_result:
-            analyze_result = cast(SentimentError, analyze_result)
+            analyze_result = cast(SentimentAnalysisError, analyze_result)
             return {
-                "message": "biasapi error "
-                if analyze_result["bias"] is None
-                else "" + "sentimentapi error "
-                if analyze_result["sentiment"] is None
-                else "" + f": {analyze_result['message']}"
+                "message": analyze_result["message"]
             }, http.HTTPStatus.INTERNAL_SERVER_ERROR
-        analyze_result = cast(SentimentSuccess, analyze_result)
+        analyze_result = cast(SentimentAnalysisSuccess, analyze_result)
         filtered_news = cast(
-            NewsWithSentiment, cast(dict, news) | cast(dict, analyze_result)
+            NewsWithSentiment, cast(dict, news) | {"sentiment": analyze_result["value"]}
         )
-        if analyze_result["sentiment"]["kind"] != current_sentiment["kind"]:
-            filtered_results.append(filtered_news)
-        elif analyze_result["bias"] * current_bias < 0:
+        if analyze_result["value"]["kind"] != current_sentiment["kind"]:
             filtered_results.append(filtered_news)
     return {
         "results": filtered_results,
@@ -475,7 +431,9 @@ def get_opposite_news() -> tuple[
 
 @app.route("/search", methods=["GET"])
 def search() -> tuple[
-    Union[ErrorResponse, InternalErrorResponse, GatewayTimeoutResponse, SearchResponse],
+    Union[
+        ErrorResponse, InternalErrorResponse, GatewayTimeoutResponse, SearchOkResponse
+    ],
     int,
 ]:
     try:
@@ -494,5 +452,6 @@ def search() -> tuple[
     search_result = cast(SearchError, search_result)
     return {
         "message": f"newsdataapi status_code {search_result['status_code']} "
-        f"with message {search_result['message']}"
+        f"with message {search_result['message']}",
+        "debug": "",
     }, http.HTTPStatus.INTERNAL_SERVER_ERROR
