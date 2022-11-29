@@ -23,8 +23,11 @@ class GatewayTimeoutResponse(TypedDict):
     reason: str
 
 
+SentimentLabel = Literal["positive", "neutral", "negative"]
+
+
 class Sentiment(TypedDict):
-    kind: Literal["positive", "neutral", "negative"]
+    kind: SentimentLabel
     confidence: float
 
 
@@ -69,7 +72,7 @@ class SearchOkResponse(TypedDict):
     nextOffset: Optional[int]
 
 
-class OppositeSentimentNewsOkResponse(TypedDict):
+class SearchWithFilterOkResponse(TypedDict):
     count: int
     results: list[NewsWithSentiment]
 
@@ -116,6 +119,11 @@ class SearchSuccess(TypedDict):
     nextOffset: Optional[int]
 
 
+class SearchWithSentimentSuccess(TypedDict):
+    news: list[NewsWithSentiment]
+    nextOffset: Optional[int]
+
+
 class SearchError(TypedDict):
     status_code: int
     message: str
@@ -147,6 +155,15 @@ class SentimentAnalysisSuccess(TypedDict):
 
 
 class SentimentAnalysisError(TypedDict):
+    status_code: int
+    message: str
+
+
+class SimilarityAnalysisSuccess(TypedDict):
+    is_similar: bool
+
+
+class SimilarityAnalysisError(TypedDict):
     status_code: int
     message: str
 
