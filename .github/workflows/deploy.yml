@@ -1,0 +1,27 @@
+name: Deploy to Oracle compute instance
+
+on:
+  push:
+    branches:
+      - master
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+    - name: ssh command
+      uses: garygrossgarten/github-action-ssh@release
+      with:
+        command: |
+          cd ~/news-traveler-server
+          tmux kill-session -t newsTraveler
+          tmux new-session -d -s newsTraveler
+          tmux send-keys -t newsTraveler 'git pull origin master' C-m
+          tmux send-keys -t newsTraveler 'python3 -m poetry install --no-root --no-interaction' C-m
+          tmux send-keys -t newsTraveler 'source .venv/bin/activate' C-m
+          tmux send-keys -t newsTraveler 'python3 -m flask run --host=0.0.0.0' C-m
+        host: ${{ secrets.HOST }}
+        username: ${{ secretws.USERNAME }}
+        privateKey: ${{ secrets.KEY }}
+
+          
